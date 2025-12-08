@@ -223,7 +223,6 @@ jobs:
             exit 1
           fi
 
-
   build-windows-installer:
     name: Build Windows Installer with Inno Setup
     runs-on: windows-latest
@@ -250,7 +249,7 @@ jobs:
         run: |
           echo "VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2)" >> $GITHUB_OUTPUT
           echo "COMMIT_MSG=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
-         
+          
           APP_NAME="${{ env.APP_NAME }}"
           # Get just version number (without build number)
           VERSION_NUMBER=$(echo $(grep 'version:' pubspec.yaml | cut -d ' ' -f 2) | cut -d '+' -f 1)
@@ -275,7 +274,7 @@ jobs:
           #define MyAppPublisher "Your Company Name"
           #define MyAppURL "https://yourwebsite.com"
           #define MyAppExeName "$EXE_NAME"
-
+          
           [Setup]
           ; NOTE: The value of AppId uniquely identifies this application.
           AppId={{$([guid]::NewGuid().ToString().ToUpper())}}
@@ -298,22 +297,22 @@ jobs:
           ; Uncomment to add icon
           ; SetupIconFile=assets\app_icon.ico
           ; UninstallDisplayIcon={app}\{#MyAppExeName}
-
+          
           [Languages]
           Name: "english"; MessagesFile: "compiler:Default.isl"
-
+          
           [Tasks]
           Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-
+          
           [Files]
           Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
           ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-
+          
           [Icons]
           Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
           Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
           Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-
+          
           [Run]
           Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
           "@
@@ -326,13 +325,17 @@ jobs:
       - name: Install Inno Setup
         shell: powershell
         run: |
-          Write-Host "Downloading Inno Setup..."
-          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "innosetup.exe"
-          
-          Write-Host "Installing Inno Setup..."
-          Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait
-          
+          Write-Host "Installing Inno Setup via Chocolatey..."
+          choco install innosetup -y --no-progress
           Write-Host "Inno Setup installed successfully"
+          
+          # Verify installation
+          $InnoSetupPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (Test-Path $InnoSetupPath) {
+            Write-Host "✅ Verified: Inno Setup found at $InnoSetupPath"
+          } else {
+            Write-Host "⚠️ Warning: Inno Setup not found at default location"
+          }
 
       - name: Build Installer with Inno Setup
         shell: powershell
@@ -385,15 +388,15 @@ jobs:
             echo "⚠️ Telegram secrets not set. Skipping notification."
             exit 0
           fi
-
+          
           APP_NAME="${{ env.APP_NAME }}"
-
+          
           echo "✅ Sending Windows Installer to Telegram..."
-
+          
           RESPONSE=$(curl -F chat_id="${TELEGRAM_CHAT_ID}" \
                -F document=@"${APP_NAME}-installer.exe" \
                https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument)
-
+          
           if echo "$RESPONSE" | grep -q '"ok":true'; then
             echo "✅ Successfully sent Windows Installer to Telegram!"
           else
