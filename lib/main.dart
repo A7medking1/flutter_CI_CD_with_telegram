@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
-void main() {
-  runApp(const MyApp());
+void main()async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SentryFlutter.init(
+        (options) {
+      options.dsn = 'https://1ce6c25fbc826fe7454d7907af97f676@o4510251110825984.ingest.us.sentry.io/4510251168038912';
+    },
+    // Init your App.
+    appRunner: () => runApp(MyApp()),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -65,6 +73,8 @@ class _MyHomePageState extends State<MyHomePage> {
       // called again, and so nothing would appear to happen.
       _counter++;
     });
+
+    throw Exception('Something went wrong');
   }
 
   @override
