@@ -1,313 +1,355 @@
-# 🚀 Flutter CI/CD with Telegram Notifications
+# 🚀 Flutter CI/CD with Firebase App Distribution & Telegram
 
-Automatically build your Flutter app for **Android**, **Web**, and **Windows** using GitHub Actions, and receive the builds directly in Telegram!
+Automated Flutter build pipeline using **Fastlane**, **Firebase App Distribution**, and **Telegram notifications** with public download links.
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
+![Fastlane](https://img.shields.io/badge/Fastlane-00F200?style=for-the-badge&logo=fastlane&logoColor=black)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)
 
 ---
 
-## 📋 Table of Contents
-
-- [Features](#-features)
-- [Prerequisites](#-prerequisites)
-- [Step 1: Create a Telegram Bot](#step-1-create-a-telegram-bot)
-- [Step 2: Get Your Chat ID](#step-2-get-your-chat-id)
-- [Step 3: Add Secrets to GitHub](#step-3-add-secrets-to-github)
-- [Step 4: Add Workflow File](#step-4-add-workflow-file)
-- [Step 5: Test the Setup](#step-5-test-the-setup)
-- [Customization](#-customization)
-- [Troubleshooting](#-troubleshooting)
-- [FAQ](#-faq)
-
----
-
 ## ✨ Features
 
-- 📱 **Android APK** - Automatic release build
-- 🌐 **Web Build** - Optimized with CanvasKit renderer
-- 🪟 **Windows Build** - x64 release executable
-- 📬 **Telegram Notifications** - Receive builds instantly
-- 📊 **Build Summary** - Status report for all platforms
-- ⚡ **Parallel Builds** - Faster build times
-- 🔄 **Auto-trigger** - Builds on push to main/develop branches
+- 📱 **Automated APK Builds** - Triggered on every push
+- 🔥 **Firebase App Distribution** - Public download links (no tester registration)
+- 💎 **Fastlane Integration** - Professional build automation
+- 📢 **Telegram Notifications** - Formatted messages with download links
+- 🔐 **Service Account Auth** - Secure Firebase authentication
+- 🔄 **Multi-Project Support** - Same Firebase project for 10+ apps
+- 🧹 **Auto Cleanup** - No credentials left behind
 
 ---
 
-## 📦 Prerequisites
+## 📦 What Happens Automatically
 
-Before you begin, make sure you have:
+Every push to your configured branch:
+1. ✅ Flutter APK builds in release mode
+2. ✅ Uploads to Firebase App Distribution
+3. ✅ Generates public download link
+4. ✅ Sends formatted notification to Telegram with link
+5. ✅ Cleans up temporary credentials
 
-- ✅ A Flutter project hosted on GitHub
-- ✅ A Telegram account
-- ✅ Access to your GitHub repository settings
+**Telegram Message Example:**
+```
+🚀 New Build Available!
+
+📱 App: YourApp
+🔖 Version: 1.0.1+1
+📝 Changes: Your commit message
+
+🔗 Download Link:
+https://appdistribution.firebase.google.com/pub/i/...
+
+✅ Click the link above to download and install
+```
 
 ---
 
-## Step 1: Create a Telegram Bot
+## 🔧 Quick Setup (30 minutes)
 
-### 1.1 Open Telegram and Find BotFather
+### 1️⃣ Firebase Setup (15 min)
 
-1. Open Telegram app or web version
-2. Search for **@BotFather** (it's the official bot for creating bots)
-3. Start a chat with BotFather
+**A. Create Service Account:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Select your Firebase project
+3. **IAM & Admin → Service Accounts → Create Service Account**
+4. Name: `firebase-app-distribution`
+5. Grant roles:
+   - `Firebase App Distribution Admin`
+   - `Service Account User`
+6. Create key (JSON format) → Download it
 
-### 1.2 Create Your Bot
+**B. Enable APIs:**
+1. **APIs & Services → Library**
+2. Enable:
+   - Firebase App Distribution API
+   - Firebase Management API
 
-Send the following command to BotFather:
+**C. Get Firebase App ID:**
+- Firebase Console → Project Settings → Your Apps
+- Copy the App ID (format: `1:xxxxx:android:xxxxx`)
 
+### 2️⃣ Telegram Setup (5 min)
+
+**A. Create Bot:**
+1. Open Telegram, search [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow instructions
+3. Copy the **bot token**
+
+**B. Get Chat ID:**
+1. Send a message to your bot
+2. Visit: `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
+3. Find `"chat":{"id":123456789}`
+4. Copy the **chat ID**
+
+**For channels:** Add bot as admin first, ID will be `-100xxxxxxx`
+
+### 3️⃣ GitHub Secrets (5 min)
+
+Go to **GitHub Repo → Settings → Secrets → Actions → New secret**
+
+Add these 4 secrets:
+
+| Secret Name | Value | Where to Get |
+|------------|-------|--------------|
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Complete JSON file content | Service account JSON file |
+| `FIREBASE_APP_ID` | `1:xxxxx:android:xxxxx` | Firebase Console |
+| `TELEGRAM_BOT_TOKEN` | `123456789:ABCdef...` | @BotFather |
+| `TELEGRAM_CHAT_ID` | `123456789` or `-100xxx` | getUpdates API |
+
+> **Important:** For `FIREBASE_SERVICE_ACCOUNT_JSON`:
+> - Open the downloaded JSON file
+> - Copy **all content** (Ctrl+A, Ctrl+C)
+> - Paste it as the secret value (yes, the entire JSON)
+
+### 4️⃣ Test It! (5 min)
+
+```bash
+git add .
+git commit -m "Test Firebase CI/CD"
+git push
 ```
-/newbot
-```
 
-### 1.3 Follow the Instructions
-
-BotFather will ask you for:
-
-1. **Bot Name**: Choose a display name (e.g., "My Flutter CI Bot")
-2. **Bot Username**: Must end with "bot" (e.g., "my_flutter_ci_bot")
-
-### 1.4 Save Your Bot Token
-
-After creation, BotFather will send you a message like this:
-
-```
-Done! Congratulations on your new bot. You will find it at t.me/my_flutter_ci_bot. 
-You can now add a description...
-
-Use this token to access the HTTP API:
-1234567890:ABCdefGHIjklMNOpqrsTUVwxyz123456789
-
-Keep your token secure and store it safely...
-```
-
-**📝 Copy and save this token!** You'll need it in Step 3.
-
-> ⚠️ **Important**: Never share your bot token publicly! It's like a password.
+Then:
+1. Go to **GitHub → Actions** tab
+2. Watch the workflow run
+3. Check Telegram for your notification
+4. Download APK from the Firebase link
 
 ---
 
-## Step 2: Get Your Chat ID
-
-### 2.1 Start a Chat with Your Bot
-
-1. Find your bot in Telegram (click the link from BotFather)
-2. Click **START** or send any message like "Hello"
-
-### 2.2 Get Your Chat ID
-
-Open your browser and visit this URL (replace `YOUR_BOT_TOKEN` with your actual token):
-
-```
-https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates
-```
-
-**Example:**
-```
-https://api.telegram.org/bot1234567890:ABCdefGHIjklMNOpqrsTUVwxyz123456789/getUpdates
-```
-
-### 2.3 Find Your Chat ID in the Response
-
-You'll see a JSON response like this:
-
-```json
-{
-  "ok": true,
-  "result": [
-    {
-      "update_id": 123456789,
-      "message": {
-        "message_id": 1,
-        "from": {
-          "id": 987654321,
-          "is_bot": false,
-          "first_name": "John"
-        },
-        "chat": {
-          "id": 987654321,    👈 THIS IS YOUR CHAT_ID!
-          "first_name": "John",
-          "type": "private"
-        },
-        "date": 1234567890,
-        "text": "Hello"
-      }
-    }
-  ]
-}
-```
-
-**📝 Copy the `"id"` number from the `"chat"` section!**
-
-> 💡 **Tip**: If you see `"result": []`, it means the bot hasn't received your message yet. Go back and send a message to your bot first!
-
-### 2.4 For Group Chats (Optional)
-
-If you want to receive builds in a group:
-
-1. Add your bot to the group
-2. Make the bot an admin (required for sending files)
-3. Send a message in the group
-4. Check the getUpdates URL again
-5. The chat ID for groups will be a **negative number** (e.g., `-1001234567890`)
-
----
-
-## Step 3: Add Secrets to GitHub
-
-### 3.1 Navigate to Repository Settings
-
-1. Go to your GitHub repository
-2. Click on **Settings** (top menu)
-3. In the left sidebar, find **Secrets and variables**
-4. Click **Actions**
-
-### 3.2 Add TELEGRAM_BOT_TOKEN
-
-1. Click **"New repository secret"**
-2. Fill in the form:
-   - **Name**: `TELEGRAM_BOT_TOKEN`
-   - **Secret**: Paste your bot token from Step 1.4
-3. Click **"Add secret"**
-
-### 3.3 Add TELEGRAM_CHAT_ID
-
-1. Click **"New repository secret"** again
-2. Fill in the form:
-   - **Name**: `TELEGRAM_CHAT_ID`
-   - **Secret**: Paste your chat ID from Step 2.3
-3. Click **"Add secret"**
-
-### 3.4 Verify Your Secrets
-
-You should now see two secrets listed:
-- ✅ `TELEGRAM_BOT_TOKEN`
-- ✅ `TELEGRAM_CHAT_ID`
-
-> ⚠️ **Important**: Secret names must be EXACTLY as shown (all caps with underscores). GitHub won't show you the values after saving (that's normal for security).
-
----
-
-## Step 4: Add Workflow File
-
-### 4.1 Create the Workflow Directory
-
-In your Flutter project root, create this folder structure:
+## 📁 Project Structure
 
 ```
 your-flutter-project/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml    👈 Create this file
-├── lib/
+│       └── ci.yml                    # GitHub Actions workflow
 ├── android/
-├── web/
-├── windows/
-└── pubspec.yaml
-```
-
-### 4.2 Create the Workflow File
-
-1. Create a folder named `.github` in your project root
-2. Inside `.github`, create a folder named `workflows`
-3. Inside `workflows`, create a file named `ci.yml`
-
-### 4.3 Copy the Workflow Configuration
-
-Copy the content from the `ci.yml` artifact above into your new file,
-
-### 4.4 Commit and Push
-
-```bash
-# Add the workflow file
-git add .github/workflows/ci.yml
-
-# Commit with a message
-git commit -m "Add CI/CD pipeline with Telegram notifications"
-
-# Push to GitHub
-git push origin main
+│   ├── app/
+│   │   └── build.gradle.kts          # Contains applicationId
+│   ├── fastlane/
+│   │   ├── Fastfile                  # Fastlane build configuration
+│   │   ├── Appfile                   # App settings
+│   │   ├── Gemfile                   # Ruby dependencies
+│   │   └── Gemfile.lock
+│   └── firebase-service-account.json # ⚠️ Never committed (created in CI only)
+├── .gitignore                         # Updated to exclude credentials
+├── pubspec.yaml                       # App version
+├── SETUP_GUIDE.md                     # Detailed setup instructions
+└── GITHUB_SECRETS.md                  # Secrets reference
 ```
 
 ---
 
-## Step 5: Test the Setup
+## 🎯 How It Works
 
-### 5.1 Trigger the Workflow
-
-The workflow will automatically run when you:
-- Push to the `main` branch
-- Push to the `develop` branch
-- Create a pull request to `main`
-
-Or you can manually trigger it:
-1. Go to your GitHub repository
-2. Click **Actions** tab
-3. Select **Flutter CI/CD Pipeline**
-4. Click **Run workflow**
-5. Select the branch and click **Run workflow**
-
-### 5.2 Monitor the Build
-
-1. In the **Actions** tab, you'll see your workflow running
-2. Click on the workflow run to see details
-3. You can expand each job to see the logs
-4. Watch for the green checkmarks ✅
-
-### 5.3 Receive Builds in Telegram
-
-Within 5-10 minutes, you should receive:
-
-1. **📱 Android APK** - Ready to install on Android devices
-2. **🌐 Web Build ZIP** - Extract and host on any web server
-3. **🪟 Windows Build ZIP** - Extract and run the .exe file
-4. **📊 Summary Message** - Overview of all build statuses
-
----
-
-
-
-### Q: Can I customize the message format?
-
-**A:** Yes! Edit the caption in the curl command:
+### GitHub Actions Workflow
 
 ```yaml
--F caption="🚀 New Build!%0A📱 Platform: Android%0A🏷️ Version: 1.0.0%0A📅 Date: $(date)"
+Trigger: Push to branch
+    ↓
+Checkout code
+    ↓
+Setup: Java + Flutter + Ruby + Fastlane
+    ↓
+Create service account file (temporary)
+    ↓
+Run Fastlane → Build APK + Upload to Firebase
+    ↓
+Extract public download link
+    ↓
+Send Telegram notification with link
+    ↓
+Cleanup service account file
 ```
 
-Note: `%0A` is URL-encoded newline.
+### Fastlane Lane
 
-### Q: How do I revoke/change my bot token?
+```ruby
+1. flutter clean
+2. flutter pub get
+3. flutter build apk --release
+4. firebase_app_distribution (with service account)
+5. Success! ✅
+```
 
-**A:**
-1. Message @BotFather in Telegram
-2. Send `/mybots`
-3. Select your bot
-4. Click "API Token"
-5. Click "Revoke current token"
-6. Get the new token
-7. Update the secret in GitHub
+---
 
-### Q: Can I schedule builds?
+## 🔐 Security Features
 
-**A:** Yes! Add a schedule trigger:
+- ✅ **Service account JSON** stored in GitHub Secrets (encrypted)
+- ✅ **Temporary file** created during workflow, deleted after
+- ✅ **Credentials never committed** to repository
+- ✅ **Gitignore rules** prevent accidental commits
+- ✅ **Public links only** - no sensitive data exposed
 
+---
+
+## 🌍 Public Access
+
+Downloads work **without Firebase login**:
+- ✅ No tester registration required
+- ✅ Anyone with link can download
+- ✅ First-time: Accept Firebase ToS
+- ✅ After that: Direct downloads
+
+Link format:
+```
+https://appdistribution.firebase.google.com/pub/i/<FIREBASE_APP_ID>
+```
+
+---
+
+## 🔄 Multi-Project Usage
+
+Use the **same Firebase project** for multiple Flutter apps:
+
+1. **Same for all projects:**
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` (same account)
+   - Optionally same `TELEGRAM_BOT_TOKEN`
+
+2. **Different per project:**
+   - `FIREBASE_APP_ID` (each app has unique ID)
+   - Optionally different `TELEGRAM_CHAT_ID`
+
+Just copy the workflow files and configure secrets!
+
+---
+
+## ⚙️ Configuration
+
+### Change App Name
+
+Edit `.github/workflows/ci.yml`:
+```yaml
+env:
+  APP_NAME: "YourAppName"  # ← Change this
+```
+
+### Change Trigger Branch
+
+Edit `.github/workflows/ci.yml`:
 ```yaml
 on:
-  schedule:
-    - cron: '0 0 * * *'  # Daily at midnight UTC
   push:
-    branches: [ main ]
+    branches: [ main ]  # ← Change this
+```
+
+### Customize Release Notes
+
+Edit workflow step:
+```yaml
+RELEASE_NOTES: |
+  🚀 Version: ${{ steps.version.outputs.VERSION }}
+  📝 ${{ steps.version.outputs.COMMIT_MSG }}
+  # Add custom notes here
 ```
 
 ---
 
-## 📚 Additional Resources
+## 🆘 Troubleshooting
 
-- [Flutter Documentation](https://docs.flutter.dev/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Telegram Bot API](https://core.telegram.org/bots/api)
-- [Flutter CI/CD Best Practices](https://docs.flutter.dev/deployment/cd)
+### "Invalid service account"
+- ✅ Check JSON is complete (starts with `{`, ends with `}`)
+- ✅ Verify service account has correct roles
+- ✅ Ensure Firebase APIs are enabled
+
+### "Chat not found" (Telegram)
+- ✅ Bot must be started (send a message first)
+- ✅ For channels: Bot needs admin rights
+- ✅ Check chat ID includes minus sign if group/channel
+
+### "APK not found"
+- ✅ Check APK path in Fastfile (should be `../../build/...`)
+- ✅ Verify Flutter build completed successfully
+
+### "Firebase API not enabled"
+- ✅ Enable Firebase App Distribution API
+- ✅ Enable Firebase Management API
+- ✅ Wait 1-2 minutes for APIs to activate
+
+### Platform Lock Error (Ruby)
+- ✅ Workflow includes `bundle lock --add-platform` fix
+- ✅ Removes `bundler-cache: true` if causing issues
+
+**For detailed help:** See `SETUP_GUIDE.md` Troubleshooting section
 
 ---
+
+## 📊 Workflow Status
+
+Monitor your builds:
+- **GitHub Actions**: Check status and logs
+- **Firebase Console**: View releases and analytics
+- **Telegram**: Instant notifications on completion
+
+---
+
+## 📚 Documentation Files
+
+| File | Description |
+|------|-------------|
+| `SETUP_GUIDE.md` | Complete setup walkthrough with screenshots |
+| `GITHUB_SECRETS.md` | Quick reference for all secrets |
+| `android/fastlane/Fastfile` | Fastlane configuration (commented) |
+| `.github/workflows/ci.yml` | GitHub Actions workflow |
+
+---
+
+## 🚀 Quick Commands
+
+**Test Fastlane locally:**
+```bash
+cd android
+export FIREBASE_APP_ID="your_app_id"
+export FIREBASE_SERVICE_ACCOUNT_PATH="/path/to/service-account.json"
+export RELEASE_NOTES="Test build"
+bundle exec fastlane firebase_distribution
+```
+
+**Test Telegram bot:**
+```bash
+curl -X POST "https://api.telegram.org/bot<TOKEN>/sendMessage" \
+  -d chat_id="<CHAT_ID>" \
+  -d text="Test message"
+```
+
+---
+
+## 📈 Next Steps
+
+After successful setup:
+1. ✅ Commit and push to trigger first build
+2. ✅ Monitor GitHub Actions for completion
+3. ✅ Check Firebase Console for uploaded APK
+4. ✅ Verify Telegram notification received
+5. ✅ Test download link in incognito browser
+6. ✅ Install APK and verify it works
+
+---
+
+## 🎉 Success!
+
+Your Flutter CI/CD pipeline is ready! Every push will now:
+- Build your app automatically
+- Upload to Firebase with public link
+- Notify you via Telegram
+- Keep your credentials secure
+
+**Happy Building! 🚀**
+
+---
+
+## 📝 License
+
+This CI/CD setup is open source. Customize and use as needed for your projects.
+
+---
+
+**Questions?** Check the detailed guides:
+- 📖 [SETUP_GUIDE.md](./SETUP_GUIDE.md) - Full setup instructions
+- 🔑 [GITHUB_SECRETS.md](./GITHUB_SECRETS.md) - Secrets configuration
+- 🔧 Workflow logs in GitHub Actions
