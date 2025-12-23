@@ -56,8 +56,9 @@ platform :android do
     UI.message "🏗️  Building Flutter APK (release mode)..."
     sh "flutter build apk --release"
 
-    # Define APK path
-    apk_path = "../build/app/outputs/flutter-apk/app-release.apk"
+    # Define APK path (relative to android/fastlane/ directory)
+    # ../../ goes up to project root, then into build/
+    apk_path = "../../build/app/outputs/flutter-apk/app-release.apk"
     
     # Verify APK exists
     unless File.exist?(apk_path)
