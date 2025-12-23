@@ -58,7 +58,7 @@ platform :android do
 
     # Define APK path (relative to android/fastlane/ directory)
     # ../../ goes up to project root, then into build/
-    apk_path = "build/app/outputs/flutter-apk/app-release.apk"
+    apk_path = "../build/app/outputs/flutter-apk/app-release.apk"
     
     # Verify APK exists
     unless File.exist?(apk_path)

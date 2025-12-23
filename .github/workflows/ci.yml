@@ -104,7 +104,6 @@ jobs:
       # 🚀 Build & Upload with Fastlane
       # ============================================
       - name: Build and upload to Firebase with Fastlane
-        working-directory: android
         env:
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           FIREBASE_SERVICE_ACCOUNT_PATH: firebase-service-account.json
