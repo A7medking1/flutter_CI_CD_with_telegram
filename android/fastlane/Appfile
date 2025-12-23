@@ -1,0 +1,15 @@
+# ============================================
+# 🔧 Fastlane App Configuration
+# ============================================
+# This file configures the default app settings for Fastlane
+# Environment variables are used for flexibility across multiple projects
+# ============================================
+
+# Service account JSON file path
+# This is set via environment variable in CI/CD
+# For local testing, set FIREBASE_SERVICE_ACCOUNT_PATH before running fastlane
+json_key_file(ENV['FIREBASE_SERVICE_ACCOUNT_PATH'] || "")
+
+# Package name (Android application ID)
+# This should match the applicationId in android/app/build.gradle.kts
+package_name("com.example.tes_cicd_telegram")

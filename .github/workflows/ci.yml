@@ -1,4 +1,4 @@
-name: Flutter CI/CD with Telegram
+name: Flutter CI/CD with Fastlane, Firebase & Telegram
 
 # ============================================
 # 🎯 CONFIGURATION: Change your app name here
@@ -10,396 +10,181 @@ env:
 
 on:
   push:
-    branches: [ main ]
+    branches: [ feature/firebase-fastlane-github-actions ]
   pull_request:
-    branches: [ main ]
+    branches: [ feature/firebase-fastlane-github-actions ]
 
 jobs:
 
-  build-apk:
-    name: Build apk App
+  build-and-distribute:
+    name: Build & Distribute to Firebase
     runs-on: ubuntu-latest
 
     steps:
+      # ============================================
+      # 📥 Checkout Repository
+      # ============================================
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # ============================================
+      # ☕ Setup Java
+      # ============================================
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '17.0.10'
 
+      # ============================================
+      # 📱 Setup Flutter
+      # ============================================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.35.1'
           channel: 'stable'
 
-      - name: Install dependencies
-        run: flutter pub get
+      # ============================================
+      # 💎 Setup Ruby & Fastlane
+      # ============================================
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: android
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Install Fastlane
+        working-directory: android
+        run: |
+          gem install bundler
+          bundle install
 
+      # ============================================
+      # 📊 Get Version Information
+      # ============================================
       - name: Get version info
         id: version
         run: |
-          echo "VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2)" >> $GITHUB_OUTPUT
-          echo "COMMIT_MSG=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
+          VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2)
+          COMMIT_MSG=$(git log -1 --pretty=%B | head -n 1)
+          
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+          
+          echo "📱 App Version: ${VERSION}"
+          echo "📝 Commit Message: ${COMMIT_MSG}"
 
-      - name: Rename APK with app name
+      # ============================================
+      # 🔐 Create Firebase Service Account File
+      # ============================================
+      - name: Create Firebase Service Account JSON
+        working-directory: android
         run: |
-          APP_NAME="${{ env.APP_NAME }}"
-          APK_SOURCE="build/app/outputs/flutter-apk/app-release.apk"
-          APK_TARGET="${APP_NAME}.apk"
+          echo "🔐 Creating service account file..."
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > firebase-service-account.json
           
-          echo "Copying $APK_SOURCE → $APK_TARGET"
-          cp "$APK_SOURCE" "$APK_TARGET"
-          
-          echo "✅ File list after renaming:"
-          ls -lh .
-          
-          if [ ! -f "$APK_TARGET" ]; then
-            echo "❌ Failed to rename APK. File not found: $APK_TARGET"
+          # Verify file was created
+          if [ -f firebase-service-account.json ]; then
+            echo "✅ Service account file created successfully"
+            echo "📄 File size: $(wc -c < firebase-service-account.json) bytes"
+          else
+            echo "❌ Failed to create service account file"
             exit 1
           fi
 
+      # ============================================
+      # 🚀 Build & Upload with Fastlane
+      # ============================================
+      - name: Build and upload to Firebase with Fastlane
+        working-directory: android
+        env:
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_SERVICE_ACCOUNT_PATH: firebase-service-account.json
+          RELEASE_NOTES: |
+            🚀 Version: ${{ steps.version.outputs.VERSION }}
+            📝 ${{ steps.version.outputs.COMMIT_MSG }}
+            
+            🔗 Download and install this APK to get the latest version!
+        run: |
+          echo "🚀 Starting Fastlane build and distribution..."
+          bundle exec fastlane firebase_distribution
 
-      - name: Send APK to Telegram
+      # ============================================
+      # 🔗 Get Firebase Download Link
+      # ============================================
+      - name: Get Firebase Download Link
+        id: firebase_link
+        run: |
+          # The download link follows this pattern:
+          # https://appdistribution.firebase.google.com/pub/i/<FIREBASE_APP_ID>
+          
+          FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}"
+          
+          # Extract the app identifier from the Firebase App ID
+          # Format: 1:PROJECT_NUMBER:android:APP_IDENTIFIER
+          # We need the full APP_ID for the public link
+          
+          DOWNLOAD_LINK="https://appdistribution.firebase.google.com/pub/i/${FIREBASE_APP_ID}"
+          
+          echo "DOWNLOAD_LINK=${DOWNLOAD_LINK}" >> $GITHUB_OUTPUT
+          
+          echo "================================================"
+          echo "🔗 Firebase Public Download Link:"
+          echo "${DOWNLOAD_LINK}"
+          echo "================================================"
+
+      # ============================================
+      # 📢 Send Link to Telegram
+      # ============================================
+      - name: Send Download Link to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           APP_NAME="${{ env.APP_NAME }}"
-          FILE="${APP_NAME}.apk"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          COMMIT_MSG="${{ steps.version.outputs.COMMIT_MSG }}"
+          DOWNLOAD_LINK="${{ steps.firebase_link.outputs.DOWNLOAD_LINK }}"
           
-          if [ ! -f "$FILE" ]; then
-            echo "❌ File '$FILE' does not exist!"
-            exit 1
-          fi
+          # Create formatted message with Markdown
+          MESSAGE="🚀 *New Build Available!*%0A%0A"
+          MESSAGE+="📱 *App:* ${APP_NAME}%0A"
+          MESSAGE+="🔖 *Version:* ${VERSION}%0A"
+          MESSAGE+="📝 *Changes:* ${COMMIT_MSG}%0A%0A"
+          MESSAGE+="🔗 *Download Link:*%0A${DOWNLOAD_LINK}%0A%0A"
+          MESSAGE+="✅ _Click the link above to download and install the latest version_"
           
-          echo "✅ Sending $FILE to Telegram..."
+          echo "📢 Sending notification to Telegram..."
           
-          RESPONSE=$(curl -F chat_id="${TELEGRAM_CHAT_ID}" \
-                        -F document=@"${FILE}" \
-                        https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument)
-          
-          if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo "✅ Successfully sent APK to Telegram!"
-          else
-            echo "❌ Failed to send to Telegram: $RESPONSE"
-            exit 1
-          fi
-
-
-  build-web:
-    name: Build Web App
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.1'
-          channel: 'stable'
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Web
-        run: flutter build web --release
-
-      - name: Get version info
-        id: version
-        run: |
-          echo "VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2)" >> $GITHUB_OUTPUT
-          echo "COMMIT_MSG=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
-
-      - name: Archive Web Build with app name
-        run: |
-          APP_NAME="${{ env.APP_NAME }}"
-          cd build/web
-          zip -r "../../${APP_NAME}-web.zip" .
-          cd ../..
-          ls -lh "${APP_NAME}-web.zip"
-
-      - name: Send Web Build to Telegram
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "⚠️ Telegram secrets not set. Skipping notification."
-            exit 0
-          fi
-
-          echo "✅ Sending Web build to Telegram..."
-          APP_NAME="${{ env.APP_NAME }}"
-          FILE="${APP_NAME}-web.zip"
-
-          RESPONSE=$(curl -F chat_id="${TELEGRAM_CHAT_ID}" \
-               -F document=@"${FILE}" \
-               https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument)
-
-          if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo "✅ Successfully sent Web build to Telegram!"
-          else
-            echo "❌ Failed to send to Telegram: $RESPONSE"
-            exit 1
-          fi
-
-
-  build-windows:
-    name: Build Windows App
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.1'
-          channel: 'stable'
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Get version info
-        id: version
-        shell: bash
-        run: |
-          echo "VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2)" >> $GITHUB_OUTPUT
-          echo "COMMIT_MSG=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
-
-      - name: Remove unnecessary files
-        shell: powershell
-        run: |
-          Remove-Item -Recurse -Force build/windows/x64/runner/Release/*.pdb -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force build/windows/x64/runner/Release/*.exp -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force build/windows/x64/runner/Release/*.lib -ErrorAction SilentlyContinue
-
-      - name: Archive Windows Build with app name
-        shell: powershell
-        run: |
-          $APP_NAME = "${{ env.APP_NAME }}"
-          $OUTPUT_FILE = "${APP_NAME}-windows.zip"
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath $OUTPUT_FILE
-          Get-Item $OUTPUT_FILE | Select-Object Name, Length
-
-      - name: Send Windows Build to Telegram
-        shell: bash
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "⚠️ Telegram secrets not set. Skipping notification."
-            exit 0
-          fi
-
-          echo "✅ Sending Windows build to Telegram..."
-
-          APP_NAME="${{ env.APP_NAME }}"
-          FILE="${APP_NAME}-windows.zip"
-
-
-          RESPONSE=$(curl -F chat_id="${TELEGRAM_CHAT_ID}" \
-               -F document=@"${FILE}" \
-               https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument)
-
-          if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo "✅ Successfully sent Windows build to Telegram!"
-          else
-            echo "❌ Failed to send to Telegram: $RESPONSE"
-            exit 1
-          fi
-
-  build-windows-installer:
-    name: Build Windows Installer with Inno Setup
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.1'
-          channel: 'stable'
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Get version and app info
-        id: version
-        shell: bash
-        run: |
-          echo "VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2)" >> $GITHUB_OUTPUT
-          echo "COMMIT_MSG=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
-          
-          APP_NAME="${{ env.APP_NAME }}"
-          # Get just version number (without build number)
-          VERSION_NUMBER=$(echo $(grep 'version:' pubspec.yaml | cut -d ' ' -f 2) | cut -d '+' -f 1)
-          echo "VERSION_NUMBER=${VERSION_NUMBER}" >> $GITHUB_OUTPUT
-          echo "App Name: ${APP_NAME}"
-          echo "Version: ${VERSION_NUMBER}"
-
-      - name: Create Inno Setup Script
-        shell: powershell
-        run: |
-          $APP_NAME = "${{ env.APP_NAME }}"
-          $VERSION = "${{ steps.version.outputs.VERSION_NUMBER }}"
-          
-          # Get the executable name (usually app name with .exe)
-          $EXE_NAME = Get-ChildItem -Path "build/windows/x64/runner/Release" -Filter "*.exe" | Select-Object -First 1 -ExpandProperty Name
-          
-          # Create Inno Setup script
-          $InnoScript = @"
-          ; Inno Setup Script - Auto-generated by GitHub Actions
-          #define MyAppName "$APP_NAME"
-          #define MyAppVersion "$VERSION"
-          #define MyAppPublisher "Your Company Name"
-          #define MyAppURL "https://yourwebsite.com"
-          #define MyAppExeName "$EXE_NAME"
-          
-          [Setup]
-          ; NOTE: The value of AppId uniquely identifies this application.
-          AppId={{$([guid]::NewGuid().ToString().ToUpper())}}
-          AppName={#MyAppName}
-          AppVersion={#MyAppVersion}
-          AppPublisher={#MyAppPublisher}
-          AppPublisherURL={#MyAppURL}
-          AppSupportURL={#MyAppURL}
-          AppUpdatesURL={#MyAppURL}
-          DefaultDirName={autopf}\{#MyAppName}
-          DefaultGroupName={#MyAppName}
-          AllowNoIcons=yes
-          ; Uncomment the following line to run in non-administrative install mode
-          PrivilegesRequired=lowest
-          OutputDir=installer_output
-          OutputBaseFilename={#MyAppName}-{#MyAppVersion}-Setup
-          Compression=lzma
-          SolidCompression=yes
-          WizardStyle=modern
-          ; Uncomment to add icon
-          ; SetupIconFile=assets\app_icon.ico
-          ; UninstallDisplayIcon={app}\{#MyAppExeName}
-          
-          [Languages]
-          Name: "english"; MessagesFile: "compiler:Default.isl"
-          
-          [Tasks]
-          Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-          
-          [Files]
-          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-          ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-          
-          [Icons]
-          Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-          Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-          
-          [Run]
-          Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
-          "@
-          
-          # Save the script
-          $InnoScript | Out-File -FilePath "installer_script.iss" -Encoding UTF8
-          Write-Host "Inno Setup script created successfully"
-          Get-Content "installer_script.iss"
-
-      - name: Install Inno Setup
-        shell: powershell
-        run: |
-          Write-Host "Installing Inno Setup via Chocolatey..."
-          choco install innosetup -y --no-progress
-          Write-Host "Inno Setup installed successfully"
-          
-          # Verify installation
-          $InnoSetupPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (Test-Path $InnoSetupPath) {
-            Write-Host "✅ Verified: Inno Setup found at $InnoSetupPath"
-          } else {
-            Write-Host "⚠️ Warning: Inno Setup not found at default location"
-          }
-
-      - name: Build Installer with Inno Setup
-        shell: powershell
-        run: |
-          # Find Inno Setup compiler
-          $InnoSetupPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          
-          if (-Not (Test-Path $InnoSetupPath)) {
-            Write-Host "Inno Setup not found at default location, searching..."
-            $InnoSetupPath = Get-ChildItem -Path "C:\Program Files (x86)" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          }
-          
-          if (Test-Path $InnoSetupPath) {
-            Write-Host "Using Inno Setup at: $InnoSetupPath"
-            & $InnoSetupPath "installer_script.iss"
-          
-            # List generated installers
-            Write-Host "`nGenerated Installers:"
-            Get-ChildItem -Path "installer_output" -Filter "*.exe"
-          } else {
-            Write-Error "Inno Setup compiler not found!"
-            exit 1
-          }
-
-      - name: Rename Installer
-        shell: powershell
-        run: |
-          $APP_NAME = "${{ env.APP_NAME }}"
-          
-          # Find the generated installer
-          $Installer = Get-ChildItem -Path "installer_output" -Filter "*.exe" | Select-Object -First 1
-          
-          if ($Installer) {
-            $NewName = "${APP_NAME}-installer.exe"
-            Copy-Item -Path $Installer.FullName -Destination $NewName
-            Write-Host "Installer renamed to: $NewName"
-            Get-Item $NewName | Select-Object Name, Length
-          } else {
-            Write-Error "Installer not found!"
-            exit 1
-          }
-
-      - name: Send Installer to Telegram
-        shell: bash
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "⚠️ Telegram secrets not set. Skipping notification."
-            exit 0
-          fi
-          
-          APP_NAME="${{ env.APP_NAME }}"
-          
-          echo "✅ Sending Windows Installer to Telegram..."
-          
-          RESPONSE=$(curl -F chat_id="${TELEGRAM_CHAT_ID}" \
-               -F document=@"${APP_NAME}-installer.exe" \
-               https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument)
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview=false)
           
           if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo "✅ Successfully sent Windows Installer to Telegram!"
+            echo "✅ Successfully sent notification to Telegram!"
+            echo "📱 Message preview:"
+            echo "   App: ${APP_NAME}"
+            echo "   Version: ${VERSION}"
+            echo "   Link: ${DOWNLOAD_LINK}"
           else
-            echo "❌ Failed to send to Telegram: $RESPONSE"
+            echo "❌ Failed to send to Telegram"
+            echo "Response: $RESPONSE"
             exit 1
+          fi
+
+      # ============================================
+      # 🧹 Cleanup (Always runs)
+      # ============================================
+      - name: Cleanup service account file
+        if: always()
+        working-directory: android
+        run: |
+          if [ -f firebase-service-account.json ]; then
+            echo "🧹 Removing service account file..."
+            rm -f firebase-service-account.json
+            echo "✅ Service account file removed"
           fi

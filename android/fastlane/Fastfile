@@ -1,0 +1,119 @@
+# ============================================
+# 🚀 Flutter CI/CD Fastlane Configuration
+# ============================================
+# This Fastfile handles building and distributing
+# Flutter APKs to Firebase App Distribution
+# ============================================
+
+default_platform(:android)
+
+platform :android do
+  # ============================================
+  # 📦 Firebase App Distribution Lane
+  # ============================================
+  # This lane builds the Flutter APK and uploads it to Firebase App Distribution
+  # with public access (no tester groups required)
+  #
+  # Required Environment Variables:
+  #   - FIREBASE_APP_ID: Your Firebase app ID (e.g., 1:xxxxx:android:xxxxx)
+  #   - FIREBASE_SERVICE_ACCOUNT_PATH: Path to service account JSON file
+  #   - RELEASE_NOTES: (Optional) Release notes for this build
+  #
+  # Usage:
+  #   fastlane firebase_distribution
+  #
+  desc "Build Flutter APK and distribute to Firebase (Public Access)"
+  lane :firebase_distribution do
+    # Get environment variables
+    firebase_app_id = ENV['FIREBASE_APP_ID']
+    service_account_path = ENV['FIREBASE_SERVICE_ACCOUNT_PATH']
+    release_notes = ENV['RELEASE_NOTES'] || "New build from CI/CD pipeline"
+    
+    # Validate required environment variables
+    unless firebase_app_id && service_account_path
+      UI.user_error!("❌ Missing required environment variables!")
+      UI.user_error!("   Please set: FIREBASE_APP_ID, FIREBASE_SERVICE_ACCOUNT_PATH")
+    end
+
+    # Print configuration (for debugging)
+    UI.message "================================================"
+    UI.message "🔧 Firebase Distribution Configuration"
+    UI.message "================================================"
+    UI.message "📱 App ID: #{firebase_app_id}"
+    UI.message "🔐 Service Account: #{service_account_path}"
+    UI.message "📝 Release Notes: #{release_notes}"
+    UI.message "================================================"
+
+    # Clean previous builds
+    UI.message "🧹 Cleaning previous builds..."
+    sh "flutter clean"
+
+    # Get dependencies
+    UI.message "📦 Getting Flutter dependencies..."
+    sh "flutter pub get"
+
+    # Build release APK
+    UI.message "🏗️  Building Flutter APK (release mode)..."
+    sh "flutter build apk --release"
+
+    # Define APK path
+    apk_path = "../build/app/outputs/flutter-apk/app-release.apk"
+    
+    # Verify APK exists
+    unless File.exist?(apk_path)
+      UI.user_error!("❌ APK not found at: #{apk_path}")
+    end
+
+    # Get APK size for logging
+    apk_size = File.size(apk_path) / 1024.0 / 1024.0
+    UI.success "✅ APK built successfully! Size: #{apk_size.round(2)} MB"
+
+    # Upload to Firebase App Distribution
+    UI.message "🚀 Uploading to Firebase App Distribution..."
+    
+    begin
+      firebase_app_distribution(
+        app: firebase_app_id,
+        service_credentials_file: service_account_path,
+        android_artifact_type: "APK",
+        android_artifact_path: apk_path,
+        release_notes: release_notes,
+        # NOTE: No 'groups' or 'testers' parameter = PUBLIC ACCESS
+        # Anyone with the link can download without being added as a tester
+      )
+      
+      UI.success "================================================"
+      UI.success "✅ Successfully uploaded to Firebase!"
+      UI.success "================================================"
+      UI.success "📱 App ID: #{firebase_app_id}"
+      UI.success "📝 Release Notes: #{release_notes}"
+      UI.success "🌍 Access: PUBLIC (no tester registration required)"
+      UI.success "================================================"
+      
+    rescue => ex
+      UI.error "❌ Failed to upload to Firebase App Distribution"
+      UI.error "Error: #{ex.message}"
+      UI.user_error!("Firebase upload failed. Please check your configuration.")
+    end
+  end
+
+  # ============================================
+  # 🧪 Test Lane (Optional)
+  # ============================================
+  # Use this lane to test your Fastlane configuration locally
+  #
+  # Usage:
+  #   fastlane test
+  #
+  desc "Test lane for debugging Fastlane configuration"
+  lane :test do
+    UI.message "🧪 Testing Fastlane configuration..."
+    UI.message "Flutter version:"
+    sh "flutter --version"
+    UI.message "Ruby version:"
+    sh "ruby --version"
+    UI.message "Fastlane version:"
+    sh "fastlane --version"
+    UI.success "✅ Fastlane configuration test passed!"
+  end
+end

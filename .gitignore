@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase & Fastlane - IMPORTANT: Never commit credentials!
+**/firebase-service-account*.json
+**/google-services-account*.json
+android/fastlane/report.xml
+android/fastlane/test_output/
+android/fastlane/Preview.html
+android/fastlane/screenshots
+android/fastlane/builds
