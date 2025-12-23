@@ -55,6 +55,7 @@ platform :android do
     # Build release APK
     UI.message "🏗️  Building Flutter APK (release mode)..."
     sh "flutter build apk --release"
+
     # Debug: Print current working directory immediately after build
     UI.message "================================================"
     UI.message "🔍 Debug: Current Working Directory (after build)"
@@ -66,7 +67,29 @@ platform :android do
     # Define APK path (relative to android/fastlane/ directory)
     # ../../ goes up to project root, then into build/
     apk_path = "../../build/app/outputs/flutter-apk/app-release.apk"
-    UI.message "📁 APK exists? #{File.exist}"
+    absolute_apk_path = File.expand_path(apk_path)
+
+    UI.message "📱 Relative APK Path: #{apk_path}"
+    UI.message "📱 Absolute APK Path: #{absolute_apk_path}"
+    UI.message "📁 APK exists? #{File.exist?(apk_path)}"
+
+    # Debug: List what's actually in the build directory
+    build_dir = "../../build/app/outputs/flutter-apk"
+    if Dir.exist?(build_dir)
+      UI.message "📂 Contents of flutter-apk directory:"
+      Dir.glob("#{build_dir}/*").each do |file|
+        UI.message "   - #{File.basename(file)}"
+      end
+    else
+      UI.message "❌ Build directory doesn't exist: #{build_dir}"
+      UI.message "🔍 Let's check what exists in ../../build:"
+      if Dir.exist?("../../build")
+        sh "ls -la ../../build"
+      else
+        UI.message "❌ ../../build doesn't exist either!"
+      end
+    end
+    UI.message "================================================"
 
     # Verify APK exists
     unless File.exist?(apk_path)
