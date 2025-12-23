@@ -55,11 +55,19 @@ platform :android do
     # Build release APK
     UI.message "🏗️  Building Flutter APK (release mode)..."
     sh "flutter build apk --release"
+    # Debug: Print current working directory immediately after build
+    UI.message "================================================"
+    UI.message "🔍 Debug: Current Working Directory (after build)"
+    UI.message "================================================"
+    current_dir = Dir.pwd
+    UI.message "📂 Current Path: #{current_dir}"
+    UI.message "================================================"
 
     # Define APK path (relative to android/fastlane/ directory)
     # ../../ goes up to project root, then into build/
-    apk_path = "../build/app/outputs/flutter-apk/app-release.apk"
-    
+    apk_path = "../../build/app/outputs/flutter-apk/app-release.apk"
+    UI.message "📁 APK exists? #{File.exist}"
+
     # Verify APK exists
     unless File.exist?(apk_path)
       UI.user_error!("❌ APK not found at: #{apk_path}")
