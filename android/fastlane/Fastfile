@@ -108,7 +108,7 @@ platform :android do
         app: firebase_app_id,
         service_credentials_file: service_account_path,
         android_artifact_type: "APK",
-        android_artifact_path: apk_path,
+        android_artifact_path: absolute_apk_path,
         release_notes: release_notes,
         # NOTE: No 'groups' or 'testers' parameter = PUBLIC ACCESS
         # Anyone with the link can download without being added as a tester
