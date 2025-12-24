@@ -152,7 +152,7 @@ jobs:
           APP_NAME="${{ env.APP_NAME }}"
           VERSION="${{ steps.version.outputs.VERSION }}"
           COMMIT_MSG="${{ steps.version.outputs.COMMIT_MSG }}"
-          DOWNLOAD_LINK="https://appdistribution.firebase.dev/i/7904c07a8997ebca"
+          DOWNLOAD_LINK="https://appdistribution.firebase.dev/i/f90c0d67fab4ff58"
           
           # Create formatted message with Markdown
           MESSAGE="🚀 *New Build Available!*%0A%0A"
