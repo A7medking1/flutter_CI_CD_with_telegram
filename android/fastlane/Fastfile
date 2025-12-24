@@ -110,6 +110,8 @@ platform :android do
         android_artifact_type: "APK",
         android_artifact_path: absolute_apk_path,
         release_notes: release_notes,
+        groups: "public-testers",
+
         # NOTE: No 'groups' or 'testers' parameter = PUBLIC ACCESS
         # Anyone with the link can download without being added as a tester
       )
